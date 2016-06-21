@@ -5,7 +5,6 @@ Read in Julian's files and make plotting files
 """
 
 import numpy as np
-from ndhist.hist import Hist, Axis
 from ndhist.mpl import Canvas
 import argparse
 import itertools
@@ -27,6 +26,25 @@ _var_struct = [
     "all_prediction"
 ]
 
+_ranges = {
+    'eta': (-3, 3),
+    'pt': (0, 300),
+    'jet_prob': (0, 0.5),
+    'y_binary_label': (-0.5, 1.5),
+    'n_secondary_tracks': (1.5, 14.5),
+    'n_secondary': (-0.5, 7.5),
+}
+_log_vars = {
+    'pt', 'jet_prob'
+}
+def _count_bins(name):
+    return _ranges[name][1] - _ranges[name][0]
+_n_bins = {
+    'y_binary_label': 2,
+    'n_secondary_tracks': _count_bins('n_secondary_tracks'),
+    'n_secondary': _count_bins('n_secondary'),
+}
+
 def _get_structured(file_name):
     raw_array =  np.load(file_name)
     assert raw_array.shape[1] == len(_var_struct)
@@ -43,11 +61,14 @@ def _get_cut_at_rejection(array, rejection):
     assert error < 0.001
     return np.sort(array)[-index]
 
-def _draw_hist(ax, array, bins, lims):
+def _draw_hist(ax, array, bins, lims, label=''):
     counts, edges = np.histogram(array, bins, lims)
     normed = counts / float(counts.sum())
+    opts = {}
+    if label:
+        opts['label'] = label
     ax.plot(edges, np.r_[normed, normed[-1]],
-            drawstyle='steps-post')
+            drawstyle='steps-post', **opts)
 
 
 def run():
@@ -66,20 +87,44 @@ def run():
         np.save(struct_name, array)
 
     # sort by prediction
-    pred = 'track_prediction'
-    array.sort(order=pred)
+    pred_name = 'all_prediction'
+    array.sort(order=pred_name)
 
-    for var in ['eta']:
+    sig_index = array['y_binary_label'] > 0.0
+    bg_index = ~sig_index
+    with Canvas('{}/dist.pdf'.format(args.out_dir)) as dists:
+        opts = dict(bins = 100, lims = (0, 1))
+        pred_arr = array[pred_name]
+        _draw_hist(dists.ax, pred_arr[sig_index], label='sig', **opts)
+        _draw_hist(dists.ax, pred_arr[bg_index], label='bg', **opts)
+        dists.ax.set_yscale('log')
+        dists.ax.legend(framealpha=0)
+
+
+    for var in ['eta', 'pt', 'jet_prob', 'y_binary_label',
+                'n_secondary_tracks', 'n_secondary']:
         outfile = join(args.out_dir,
                        '{}{}'.format(var, args.ext))
         if not isdir(args.out_dir):
             os.mkdir(args.out_dir)
         with Canvas(outfile) as canvas:
-            for rej in [1, 20, 40]:
-                cut = _get_cut_at_rejection(array[pred], rej)
-                valid = (array[pred] > cut) & (array['y_binary_label'] == 0)
-                print(np.count_nonzero(valid))
-                _draw_hist(canvas.ax, array[var][valid], 40, (-3, 3))
+            for rej in [1, 20, 50]:
+                cut = _get_cut_at_rejection(array[pred_name][bg_index], rej)
+                valid = (array[pred_name] > cut) & bg_index
+                label = 'rej-{}'.format(rej)
+                hrange = _ranges.get(var)
+                if not hrange:
+                    hrange = array[var].min(), array[var].max()
+                nbins = _n_bins.get(var, 40)
+                _draw_hist(canvas.ax, array[var][valid], nbins, hrange,
+                           label=label)
+            _draw_hist(canvas.ax, array[var][sig_index], nbins, hrange,
+                       label='sig')
+            canvas.ax.legend(framealpha=0)
+            canvas.ax.set_xlabel(var)
+            if var in _log_vars:
+                canvas.ax.set_yscale('log')
+
 
 
 if __name__ == '__main__':
