@@ -33,9 +33,10 @@ _ranges = {
     'y_binary_label': (-0.5, 1.5),
     'n_secondary_tracks': (1.5, 14.5),
     'n_secondary': (-0.5, 7.5),
+    'n_d0sig': (-0.5, 10.5),
 }
 _log_vars = {
-    'pt', 'jet_prob'
+    'pt', 'jet_prob', 'n_secondary', 'n_secondary_tracks', 'n_d0sig'
 }
 def _count_bins(name):
     return _ranges[name][1] - _ranges[name][0]
@@ -43,6 +44,7 @@ _n_bins = {
     'y_binary_label': 2,
     'n_secondary_tracks': _count_bins('n_secondary_tracks'),
     'n_secondary': _count_bins('n_secondary'),
+    'n_d0sig': _count_bins('n_d0sig'),
 }
 
 def _get_structured(file_name):
@@ -87,7 +89,7 @@ def run():
         np.save(struct_name, array)
 
     # sort by prediction
-    pred_name = 'all_prediction'
+    pred_name = 'track_prediction'
     array.sort(order=pred_name)
 
     sig_index = array['y_binary_label'] > 0.0
@@ -102,7 +104,7 @@ def run():
 
 
     for var in ['eta', 'pt', 'jet_prob', 'y_binary_label',
-                'n_secondary_tracks', 'n_secondary']:
+                'n_secondary_tracks', 'n_secondary', 'n_d0sig']:
         outfile = join(args.out_dir,
                        '{}{}'.format(var, args.ext))
         if not isdir(args.out_dir):
